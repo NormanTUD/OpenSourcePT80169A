@@ -6,7 +6,9 @@ It consists of two parts, the code for an Arduino controlling this device, and t
 To install everything that's needed, run
 
 sudo apt-get install ino
+
 sudo bash ./software/install_perl_modules.sh
+
 sudo perl ./software/control.pl
 
 Please make sure, you're using the latest Version of tesseract (uninstall, if not 5.0 alpha or higher, and then run control.pl to install the latest version automatically).
