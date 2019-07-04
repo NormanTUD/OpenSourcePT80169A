@@ -44,25 +44,15 @@ bool toparm_is_right = NULL;
 // id HIGH = nach rechts,
 // id + 1 HIGH = nach links
 
-//const String left = "left";
-//const String right = "right";
-//const String up = "up";
-//const String down = "down";
-
 const short roller = 4;
-//const String roller_name = "roller";
 const short toparm = 6;
-//const String toparm_name = "toparm";
 
 const short armlinks = 8;
-//const String armlinks_name = "left arm";
 
 const short armrechts = 10;
-//const String armrechts_name = "left arm";
 
 const short lichtschranke_toparm = 12;
 const short lichtschranke_roller = 13;
-//const String lichtschranke_toparm_name = "toparm";
 
 const int arm_seitenwechsel_zeit = 2300; // TODO!!! Abhängigkeit von eingestellten CM vom Toparm!!!
 
@@ -77,16 +67,14 @@ const int maxIncomingStringLength = 16;
 char printableText[maxOutputLength];
 char incomingString[maxIncomingStringLength];
 
-String testtest;
-
+String serialChars;
 
 void setup() {
 #if enabledebug
 	sprintf(printableText, "setup"); debug();
-#endif 
+#endif
 
-	testtest.reserve(maxIncomingStringLength - 1);
-	//Serial.begin(57600);
+	serialChars.reserve(maxIncomingStringLength - 1);
 	Serial.begin(38400);
 
 	set_pinmode(LED_BUILTIN, OUTPUT);
@@ -118,13 +106,12 @@ void getCharsFromSerial () {
 	sprintf(printableText, "getCharsFromSerial()"); debug();
 #endif
 
-
 	Serial.flush();
 	if (Serial.available()) {
-		testtest = Serial.readStringUntil('\n');
-		testtest.trim();
-		testtest.toCharArray(incomingString, maxIncomingStringLength);
-		testtest = "";
+		serialChars = Serial.readStringUntil('\n');
+		serialChars.trim();
+		serialChars.toCharArray(incomingString, maxIncomingStringLength);
+		serialChars = "";
 	}
 
 	intendation_level--;
@@ -164,135 +151,98 @@ void help () {
 	sprintf(printableText, "\t\ttest\tPorts 4-11"); myPrint();
 }
 
-
 int empfange_signal () {
 	intendation_level++;
 #if enabledebug
 	sprintf(printableText, "empfange_signal"); debug();
 #endif
-		getCharsFromSerial();
+	getCharsFromSerial();
 
-		if(strlen(incomingString)) {
+	if(strlen(incomingString)) {
 #if enabledebug
-			sprintf(printableText, "strlen(incomingString): %d", strlen(incomingString)); debug();
+		sprintf(printableText, "strlen(incomingString): %d", strlen(incomingString)); debug();
 #endif
 
 #if enabledebug
-			sprintf(printableText, "incomingString: >%s<", incomingString); debug();
+		sprintf(printableText, "incomingString: >%s<", incomingString); debug();
 #endif
 
-			if(strcmp(incomingString, "turn right") == 0 || strcmp(incomingString, "p") == 0) { // Geht noch nicht
+		if(strcmp(incomingString, "turn right") == 0 || strcmp(incomingString, "p") == 0) {
+			nach_rechts_blaettern();
+		} else if (strcmp(incomingString, "turn left") == 0) {
+#if enabledebug
+			sprintf(printableText, "TODO!!! nach_links_blaettern"); debug();
+#endif
+
+		} else if (strcmp(incomingString, "both arms up") == 0) {
+			arm_links_unten = false;
+			arm_rechts_unten = false;
+			both_arms_up();
+		} else if (strcmp(incomingString, "both arms down") == 0) {
+			arm_links_unten = false;
+			arm_rechts_unten = false;
+			both_arms_down();
+
+		} else if (strcmp(incomingString, "right arm up") == 0 || strcmp(incomingString, "rau") == 0) {
+			rechten_aussenarm_hoch();
+		} else if (strcmp(incomingString, "right arm down") == 0 || strcmp(incomingString, "rad") == 0) {
+			rechten_aussenarm_runter();
+
+		} else if (strcmp(incomingString, "right arm up force") == 0 || strcmp(incomingString, "rauf") == 0) {
+			arm_rechts_unten = false;
+			rechten_aussenarm_hoch();
+		} else if (strcmp(incomingString, "right arm down force") == 0 || strcmp(incomingString, "radf") == 0) {
+			arm_rechts_unten = false;
+			rechten_aussenarm_runter();
+
+		} else if (strcmp(incomingString, "left arm up") == 0 || strcmp(incomingString, "lau") == 0) {
+			arm_links_unten = false;
+			linken_aussenarm_hoch();
+		} else if (strcmp(incomingString, "left arm down") == 0 || strcmp(incomingString, "lad") == 0) {
+			arm_links_unten = false;
+			linken_aussenarm_runter();
+
+		} else if (strcmp(incomingString, "toparm right") == 0 || strcmp(incomingString, "tar") == 0) {
+			toparm_rechts();
+		} else if (strcmp(incomingString, "toparm left") == 0 || strcmp(incomingString, "tal") == 0) {
+			toparm_links();
+
+		} else if (strcmp(incomingString, "roller right") == 0) {
+			roller_rechts();
+		} else if (strcmp(incomingString, "roller left") == 0) {
+			roller_links();
+
+		} else if (strcmp(incomingString, "roller normal") == 0) {
+			roller_normalstellung();
+		} else if (strcmp(incomingString, "toparm normal") == 0) {
+			toparm_normalstellung();
+
+		} else if (strcmp(incomingString, "switch toparm") == 0 || strcmp(incomingString, "s") == 0) {
+			switch_toparm();
+
+		} else if (strcmp(incomingString, "release") == 0) {
+			release_book(true);
+		} else if (strcmp(incomingString, "insert") == 0) {
+			insert_book();
+
+		} else if (strcmp(incomingString, "light roller") == 0) {
+			sprintf(printableText, "%d", objekt_ist_in_lichtschranke(lichtschranke_roller)); myPrint();
+		} else if (strcmp(incomingString, "light arm") == 0) {
+			sprintf(printableText, "%d", objekt_ist_in_lichtschranke(lichtschranke_toparm)); myPrint();
+		} else if (strcmp(incomingString, "50") == 0) {
+			for (int a = 1; a <= 50; a++) {
 				nach_rechts_blaettern();
-			} else if (strcmp(incomingString, "turn left") == 0) {
-				//nach_links_blaettern();
-#if enabledebug
-				sprintf(printableText, "TODO!!! nach_links_blaettern"); debug();
-#endif
-
-			} else if (strcmp(incomingString, "both arms up") == 0) { // OK
-				arm_links_unten = false;
-				arm_rechts_unten = false;
-				both_arms_up();
-			} else if (strcmp(incomingString, "both arms down") == 0) { // OK
-				arm_links_unten = false;
-				arm_rechts_unten = false;
-				both_arms_down();
-
-			} else if (strcmp(incomingString, "right arm up") == 0 || strcmp(incomingString, "rau") == 0) { // OK
-				rechten_aussenarm_hoch();
-			} else if (strcmp(incomingString, "right arm down") == 0 || strcmp(incomingString, "rad") == 0) { // OK
-				rechten_aussenarm_runter();
-
-			} else if (strcmp(incomingString, "right arm up force") == 0 || strcmp(incomingString, "rauf") == 0) { // OK
-				arm_rechts_unten = false;
-				rechten_aussenarm_hoch();
-			} else if (strcmp(incomingString, "right arm down force") == 0 || strcmp(incomingString, "radf") == 0) { // OK
-				arm_rechts_unten = false;
-				rechten_aussenarm_runter();
-
-			} else if (strcmp(incomingString, "left arm up") == 0 || strcmp(incomingString, "lau") == 0) {  // OK
-				arm_links_unten = false;
-				linken_aussenarm_hoch();
-			} else if (strcmp(incomingString, "left arm down") == 0 || strcmp(incomingString, "lad") == 0) { // OK
-				arm_links_unten = false;
-				linken_aussenarm_runter();
-
-			} else if (strcmp(incomingString, "toparm right") == 0 || strcmp(incomingString, "tar") == 0) { // OK
-				toparm_rechts();
-			} else if (strcmp(incomingString, "toparm left") == 0 || strcmp(incomingString, "tal") == 0) { // OK
-				toparm_links();
-
-			} else if (strcmp(incomingString, "roller right") == 0) { // OK
-				roller_rechts();
-			} else if (strcmp(incomingString, "roller left") == 0) { // OK
-				roller_links();
-
-			} else if (strcmp(incomingString, "roller normal") == 0) { // OK
-				roller_normalstellung();
-			} else if (strcmp(incomingString, "toparm normal") == 0) { // OK
-				toparm_normalstellung();
-
-			} else if (strcmp(incomingString, "switch toparm") == 0 || strcmp(incomingString, "s") == 0) { // OK
-				switch_toparm();
-
-			} else if (strcmp(incomingString, "release") == 0) { // OK
-				release_book(true);
-			} else if (strcmp(incomingString, "insert") == 0) { // OK
-				insert_book();
-
-			} else if (strcmp(incomingString, "light roller") == 0) {
-				sprintf(printableText, "%d", objekt_ist_in_lichtschranke(lichtschranke_roller)); myPrint();
-			} else if (strcmp(incomingString, "light arm") == 0) {
-				sprintf(printableText, "%d", objekt_ist_in_lichtschranke(lichtschranke_toparm)); myPrint();
-
-/*
-			} else if (strcmp(incomingString, "1") == 0) {
-				test_port(1);
-			} else if (strcmp(incomingString, "2") == 0) {
-				test_port(2);
-			} else if (strcmp(incomingString, "3") == 0) {
-				test_port(3);
-			} else if (strcmp(incomingString, "4") == 0) {
-				test_port(4);
-			} else if (strcmp(incomingString, "5") == 0) {
-				test_port(5);
-			} else if (strcmp(incomingString, "6") == 0) {
-				test_port(6);
-			} else if (strcmp(incomingString, "7") == 0) {
-				test_port(7);
-			} else if (strcmp(incomingString, "8") == 0) {
-				test_port(8);
-			} else if (strcmp(incomingString, "9") == 0) {
-				test_port(9);
-			} else if (strcmp(incomingString, "10") == 0) {
-				test_port(10);
-			} else if (strcmp(incomingString, "11") == 0) {
-				test_port(11);
-
-			} else if (strcmp(incomingString, "test") == 0) {
-#if enabledebug
-				sprintf(printableText, "Testing ports 4-11"); debug();
-#endif
-				for (int a = 4; a <= 11; a++) {
-					test_port(a);
-				}
-*/
-
-			} else if (strcmp(incomingString, "50") == 0) {
-				for (int a = 1; a <= 50; a++) {
-					nach_rechts_blaettern();
-				}
-
-			} else if (strcmp(incomingString, "help") == 0) {
-				help();
-			} else {
-				sprintf(printableText, "Unknown String: %s", incomingString); myPrint();
-				help();
 			}
+
+		} else if (strcmp(incomingString, "help") == 0) {
+			help();
+		} else {
+			sprintf(printableText, "Unknown String: %s", incomingString); myPrint();
+			help();
 		}
-		sprintf(incomingString, "");
-		memset(incomingString, 0, sizeof(incomingString));   // Clear contents of Buffer
-//	}
+	}
+	sprintf(incomingString, "");
+	memset(incomingString, 0, sizeof(incomingString));
 
 	warte(300);
 
@@ -304,7 +254,6 @@ void insert_book () {
 	rechten_aussenarm_runter();
 	sprintf(printableText, "done"); myPrint();
 }
-
 
 void release_book (bool showdone) {
 	toparm_normalstellung();
@@ -401,12 +350,6 @@ void roller_normalstellung() {
 	if(roller_is_normalstellung != true || roller_is_normalstellung == NULL) {
 		int rotation_time = 30;
 
-		/*
-		   while (objekt_ist_in_lichtschranke(lichtschranke_roller)) {
-		   roller_links_mit_zeit(rotation_time);
-		   }
-		 */
-
 		while (!objekt_ist_in_lichtschranke(lichtschranke_roller)) {
 			roller_rechts_mit_zeit(rotation_time);
 		}
@@ -456,7 +399,6 @@ void nach_rechts_blaettern () {
 	// toparm nach links
 	// toparm aus
 
-	// roller 2x drehen irgendwo noch rein!!!
 	alles_auf_normalstellung();
 
 	toparm_rechts();
@@ -485,7 +427,6 @@ void nach_rechts_blaettern () {
 #if measuretime
 	unsigned int CurrentTime = millis();
 	unsigned int ElapsedTime = CurrentTime - StartTime;
-	//sprintf(printableText, "MEASURED TIME: %s", String(ElapsedTime)); myPrint();
 	Serial.print("MEASURED TIME: ");
 	Serial.println(int(ElapsedTime / 1000));
 #endif
@@ -549,7 +490,6 @@ void toparm_links_mit_zeit (int zeit) {
 	toparm_is_right = false;
 	toparm_is_normalstellung = false;
 
-
 	intendation_level--;
 }
 
@@ -558,7 +498,6 @@ void toparm_rechts () {
 #if enabledebug
 	sprintf(printableText, "toparm_rechts"); debug();
 #endif
-
 
 	off(toparm);
 	off(toparm + 1);
@@ -595,8 +534,6 @@ void toparm_links_erstes_drittel () {
 #if enabledebug
 	sprintf(printableText, "toparm_links_erstes_drittel"); debug();
 #endif
-
-
 	off(toparm);
 	off(toparm + 1);
 
@@ -606,14 +543,6 @@ void toparm_links_erstes_drittel () {
 
 	toparm_is_normalstellung = false;
 
-/*
-	on(toparm + 1);
-	//warte(int(arm_seitenwechsel_zeit / 3));
-	warte(int(arm_seitenwechsel_zeit / 2));
-	off(toparm + 1);
-*/
-
-	//toparm_links_mit_zeit(int(arm_halbe_bewegung_zeit));
 	intendation_level--;
 }
 
@@ -652,7 +581,6 @@ void toparm_rechts_rest () {
 #endif
 
 	on(toparm);
-	//warte(int(arm_seitenwechsel_zeit - (arm_seitenwechsel_zeit / 3)));
 	warte(int(arm_seitenwechsel_zeit / 2));
 	off(toparm);
 
