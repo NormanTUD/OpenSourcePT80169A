@@ -36,6 +36,9 @@ use File::Copy;
 use Image::Size;
 use Data::Compare;
 use Carp qw/cluck/;
+use Proc::ProcessTable;
+
+$SIG{CHLD} = 'IGNORE';
 
 my $starttime = gettimeofday();
 
@@ -64,7 +67,7 @@ my %options = (
 	has_isbn => undef,
 	max_page => undef,
 	ocr => undef,
-	autocropthreshold => 1.03,
+	autocropthreshold => 1.02,
 	serial => '/dev/ttyUSB0',
 	test => 0,
 	max_forks => 6,
@@ -93,6 +96,27 @@ END {
 
 if($options{test}) {
 	debug "Starting test";
+
+	my $pid = fork();
+	if($pid == 0) {
+		sleep 2;
+		exit;
+	}
+	test("get_number_of_forks()", get_number_of_forks(), 1);
+	wait();
+	test("get_number_of_forks()", get_number_of_forks(), 0);
+
+	my $maxforks = 50;
+	for (1 .. $maxforks) {
+		my $pid = fork();
+		if($pid == 0) {
+			sleep 2;
+			exit;
+		}
+	}
+	test("get_number_of_forks()", get_number_of_forks(), $maxforks);
+	wait();
+	test("get_number_of_forks()", get_number_of_forks(), 0);
 
 	my @needed_software = get_needed_software($0);
 
@@ -134,6 +158,7 @@ if($options{test}) {
 	test("get_img_average_color('testimages/crop.jpg')", get_img_average_color('testimages/crop.jpg'), "BEACB7");
 
 	test('remove_jpg("test.jpg")', remove_jpg('test.jpg'), 'test');
+
 
 	if(@failed) {
 		warn_error "\n\nFailed tests:\n\n";
@@ -254,6 +279,9 @@ sub main {
 			exit();
 		}
 	}
+	
+	calculcate_width_between_arms();
+	release();
 
 	my $turns = ($max_page + ($max_page % 2)) / 2;
 
@@ -262,8 +290,9 @@ sub main {
 		$enter = <STDIN>;
 		insert();
 		$enter = <STDIN>;
+		notify("Done preparing", "Please press enter to start scanning");
 
-
+		toparm_left();
 
 		my @times = ();
 
@@ -290,16 +319,19 @@ sub main {
 
 			if($enable_page_turner) {
 				switch_toparm();
+
 				$tempfile_left_with_folder = take_image($tempfile_left_with_folder);
+
 				debug "PID $$";
+
 				my $pid = fork();
 				die "No fork possible!" if not defined $pid;
 				if (not $pid) {
 					while (get_number_of_forks() >= $options{max_forks}) {
 						debug "Too many forks (".scalar(get_number_of_forks())."), waiting for a few of them to finish (max: $options{max_forks})";
-						sleep 2;
+						sleep 20;
 					}
-					$img = crop($random_tmp_folder, $thispage, $tempfile_left, $tempfile_right);
+					$img = crop_and_merge($random_tmp_folder, $thispage, $tempfile_left, $tempfile_right);
 					ocr_file($img);
 					exit();
 				} else {
@@ -322,6 +354,8 @@ sub main {
 		}
 	}
 
+	release();
+
 	while (wait() != -1) {
 		debug "!!! Waiting for forked jobs !!!";
 		nanosleep 200_000_000;
@@ -341,6 +375,12 @@ sub main {
 		warn_color "Could not create PDF!";
 	}
 
+	final_sound();
+}
+
+sub final_sound {
+	my $command = 'beep -f 130 -l 100 -n -f 262 -l 100 -n -f 330 -l 100 -n -f 392 -l 100 -n -f 523 -l 100 -n -f 660 -l 100 -n -f 784 -l 300 -n -f 660 -l 300 -n -f 146 -l 100 -n -f 262 -l 100 -n -f 311 -l 100 -n -f 415 -l 100 -n -f 523 -l 100 -n -f 622 -l 100 -n -f 831 -l 300 -n -f 622 -l 300 -n -f 155 -l 100 -n -f 294 -l 100 -n -f 349 -l 100 -n -f 466 -l 100 -n -f 588 -l 100 -n -f 699 -l 100 -n -f 933 -l 300 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 933 -l 100 -n -f 1047 -l 400';
+	debug_qx($command);
 }
 
 sub move_to_final {
@@ -518,6 +558,12 @@ sub get_input {
 			}
 		} elsif ($type eq 'int') {
 			while ($var !~ m#^\d+$#) {
+				warn_color "Invalid number input `$var`. Try again.";
+				$var = <STDIN>;
+				chomp $var;
+			}
+		} elsif ($type eq 'float') {
+			while ($var !~ m#^\d+(?:.\d+)?$#) {
 				warn_color "Invalid number input `$var`. Try again.";
 				$var = <STDIN>;
 				chomp $var;
@@ -741,7 +787,6 @@ sub auto_white_balance {
 	my $jpegpath = shift;
 	if(program_installed("gimp")) {
 		if(-e $jpegpath) {
-
 			my $command = qq#gimp -ifd -b '(batch-auto-levels "$jpegpath")' -b '(gimp-quit 0)'#;
 			debug_system($command);
 		} else {
@@ -971,15 +1016,14 @@ sub initialize_serial {
 	my $recursive = shift // 0;
 	if(-e $serial) {
 		debug("initialize_serial($serial)");
-		$ob = Device::SerialPort->new($serial);
-		#$ob->baudrate(57600);
+		$ob = Device::SerialPort->new($serial) or die $!;
 		$ob->baudrate(38400);
 		$ob->parity("none");
 		$ob->stopbits(1);
 		$ob->write_settings;
-		print_to_serial_port("", "done", $recursive);
+		#print_to_serial_port("", "done", $recursive);
 	} else {
-		warn "ERROR! $serial could not be found!";
+		die "ERROR! $serial could not be found!";
 	}
 }
 
@@ -992,9 +1036,14 @@ sub release {
 sub insert {
 	debug("insert");
 
-	print_to_serial_port("insert", "done");
+	print_to_serial_port("insert", "done insert");
 }
 
+sub toparm_left {
+	debug("toparm_left");
+
+	print_to_serial_port("toparm left", "done toparm left");
+}
 
 sub next_page {
 	debug("next_page");
@@ -1005,10 +1054,10 @@ sub next_page {
 sub switch_toparm {
 	debug("switch_toparm");
 
-	print_to_serial_port("switch toparm", "done");
+	print_to_serial_port("switch toparm", "done switch");
 }
 
-sub crop {
+sub crop_and_merge {
 	my $tmp = shift;
 	my $pagenr = shift;
 	my $img1 = shift;
@@ -1018,12 +1067,7 @@ sub crop {
 	my $left = crop_single_file($tmp, $img1, 0);
 	my $right = crop_single_file($tmp, $img2, 1);
 
-	if($options{preprocessing}) {
-		my $merged =  merge($tmp, $left, $right, $pagenr);
-		return autocrop_image($merged);
-	} else {
-		return merge($tmp, $left, $right, $pagenr);
-	}
+	return merge($tmp, $left, $right, $pagenr);
 }
 
 sub merge {
@@ -1336,17 +1380,31 @@ sub no_rotation {
 	}
 }
 
+sub deskew_image {
+	my $image = shift;
+
+	my $deskew_command = "mv $image $image.before_deskew.jpg; ./deskew $image.before_deskew.jpg -o $image";
+	debug_qx($deskew_command);
+}
+
 sub ocr_file {
 	my $jpegpath = shift;
 	if($options{ocr}) {
 		if($options{preprocessing}) {
 			auto_white_balance($jpegpath);
+			autocrop_image($jpegpath);
+			deskew_image($jpegpath);
 		}
 		debug "OCR enabled";
-		if(program_installed('tesseract')) {
+
+		if(program_installed('convert')) {
 			my $border_command = qq#convert $jpegpath -bordercolor White -border 10x10 $jpegpath#;
 			debug_system($border_command);
-			my $ocr_command = 'tesseract -l '.$options{language}.' '.$jpegpath.' '.remove_jpg($jpegpath).' pdf';
+		}
+
+		if(program_installed('tesseract')) {
+
+			my $ocr_command = "tesseract -l $options{language} $jpegpath ".remove_jpg($jpegpath).' pdf';
 			debug_system($ocr_command);
 		} else {
 			notify("OCR could not be started", "Tesseract not found");
@@ -1355,12 +1413,20 @@ sub ocr_file {
 }
 
 sub get_number_of_forks {
+	my $number_of_forks = 0;
+	for my $p (@{new Proc::ProcessTable->table}){
+		$number_of_forks++ if($p->ppid == $$);
+	}
+	return $number_of_forks;
+
+=head
 	if(program_installed("pgrep")) {
 		my @forks = split(/\n/, debug_qx('pgrep -P '.$mainpid));
 		return @forks;
 	} else {
 		die "ERROR!!!! pgrep not installed!";
 	}
+=cut
 }
 
 sub guess_serial_port {
@@ -1401,12 +1467,16 @@ sub print_to_serial_port {
 
 	$ob->are_match("\n"); 
 	my $gotit = "";
+	my $i = 0;
 	while ($gotit !~ /$waitfor/) {
+		die "$options{serial} not found!" unless -e $options{serial};
 		$gotit = $ob->lookfor;
 		chomp $gotit;
-		debug "Got Serial-String: >$gotit<";
+		$gotit =~ s#\r##g;
+		debug "$i: Printed `$string`; waiting for `$waitfor`; got Serial-String: >$gotit<";
 		die "Aborted without match\n" unless (defined $gotit);
-		nanosleep 200_000_000;
+		nanosleep 100_000_000;
+		$i++;
 	}
 
 	$ob->lookclear;
@@ -1466,7 +1536,7 @@ sub install_needed_software {
 		],
 		'tesseract' => [
 			'apt-get -y install g++ autoconf automake libtool pkg-config libpng-dev libtiff5-dev zlib1g-dev'.
-			' automake ca-certificates g++ git libtool libleptonica-dev make pkg-config asciidoc libpango1.0-dev',
+			'automake ca-certificates g++ git libtool libleptonica-dev make pkg-config asciidoc libpango1.0-dev',
 			'mkdir ~/tesseractsource',
 			'cd ~/tesseractsource; git clone --depth 1 https://github.com/tesseract-ocr/tesseract.git',
 			'cd ~/tesseractsource/tesseract; ./autogen.sh; autoreconf -i; ./configure; make; make install; ldconfig'
@@ -1499,4 +1569,18 @@ sub install_needed_software {
 			}
 		}
 	}
+}
+
+sub calculcate_width_between_arms {
+	my $x = get_input("Height of Toparm?", 0, "float", "heighttoparm");
+
+	my $width_between_arms = (2.25 * $x) + 14.875;
+	$width_between_arms = int($width_between_arms + 0.5);
+
+	my $arm_from_center = $width_between_arms / 2;
+	$arm_from_center = int($arm_from_center + 0.5);
+
+	print "Width between arms: $width_between_arms, width between each arm and center: $arm_from_center\n";
+
+	my $enter = <STDIN>;
 }
