@@ -69,7 +69,7 @@ const int arm_seitenwechsel_zeit = 2300; // TODO!!! Abhängigkeit von eingestell
 const int aussenarm_beweg_zeit = 600;
 
 const int roller_zeit = 1000;
-const int roller_zeit_oben = 1500;
+const int roller_zeit_oben = 1700;
 
 const int maxOutputLength = 50;
 const int maxIncomingStringLength = 16;
@@ -392,6 +392,8 @@ void switch_toparm () {
 	}
 	toparm_is_normalstellung = false;
 
+	roller_normalstellung();
+
 	sprintf(printableText, "done switch"); myPrint();
 	intendation_level--;
 }
@@ -462,6 +464,10 @@ void nach_rechts_blaettern () {
 
 	// roller 2x drehen irgendwo noch rein!!!
 
+	if(pagecounter == 0) {
+		alles_auf_normalstellung();
+	}
+
 	aussenarm_normalstellung();
 	roller_normalstellung();
 	toparm_rechts();
@@ -477,6 +483,7 @@ void nach_rechts_blaettern () {
 	rechten_aussenarm_runter();
 
 	roller_links_mit_zeit(roller_zeit_oben);
+	//roller_rechts_mit_zeit(roller_zeit_oben);
 
 	linken_aussenarm_hoch();
 
