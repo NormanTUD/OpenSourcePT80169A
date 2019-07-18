@@ -365,22 +365,22 @@ void switch_toparm () {
 
 	roller_normalstellung();
 
+	short toparm_rechts = toparm;
 	short toparm_links = toparm + 1;
 
 	short movetime = 3000;
 
-	off(toparm);
-	off(toparm + 1);
+	off(toparm_rechts);
+	off(toparm_links);
 
 	if(toparm_is_right == NULL || toparm_is_right == false) {
-		on(toparm);
+		on(toparm_rechts);
 		warte(movetime);
-		off(toparm);
+		off(toparm_rechts);
 #if enabledebug
 	sprintf(printableText, "SETTING TOPARM TO TRUE 1"); debug();
 #endif
 		toparm_is_right = true;
-
 	} else if (toparm_is_right == true) {
 		on(toparm_links);
 		warte(movetime);
@@ -452,27 +452,12 @@ void nach_rechts_blaettern () {
 #if measuretime
 	unsigned int StartTime = millis();
 #endif
-
-	// Rechten aussenarm runter
-	// Rechten aussenarm hoch
-	// Rechten aussenarm aus
-	// TODO!!! roller in Normalstellung
-	// toparm nach rechts
-	// roller nach rechts drehen
-	// toparm nach links
-	// toparm aus
-
-	// roller 2x drehen irgendwo noch rein!!!
-
 	if(pagecounter == 0) {
 		alles_auf_normalstellung();
 	}
 
 	aussenarm_normalstellung();
 	roller_normalstellung();
-	toparm_rechts();
-
-	//aussenarm_normalstellung();
 
 	toparm_rechts();
 	rechten_aussenarm_hoch();
@@ -483,7 +468,6 @@ void nach_rechts_blaettern () {
 	rechten_aussenarm_runter();
 
 	roller_links_mit_zeit(roller_zeit_oben);
-	//roller_rechts_mit_zeit(roller_zeit_oben);
 
 	linken_aussenarm_hoch();
 
@@ -576,13 +560,14 @@ void toparm_rechts () {
 	sprintf(printableText, "toparm_rechts"); debug();
 #endif
 
-
 	off(toparm);
 	off(toparm + 1);
 
-	on(toparm);
-	warte(2500);
-	off(toparm);
+	if(toparm_is_right != true) {
+		on(toparm);
+		warte(2300);
+		off(toparm);
+	}
 
 #if enabledebug
 	sprintf(printableText, "SETTING TOPARM TO TRUE 4"); debug();
